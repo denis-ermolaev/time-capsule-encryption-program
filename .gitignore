@@ -1,0 +1,7 @@
+.pyarmor
+.venv
+capsules
+dist
+create_read_capsules.spec
+main.spec
+pyarmor.bug.log

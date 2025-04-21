@@ -1,0 +1,8 @@
+pyarmor gen --enable-jit --mix-str --assert-call --private foo.py
+
+
+pyarmor gen --enable-jit --assert-call --private create_read_capsules.py
+
+pyarmor gen --enable-jit --assert-call --private --pack onefile main.py
+
+pyarmor gen --enable-jit --assert-call --private --pack onedir create_read_capsules.py
