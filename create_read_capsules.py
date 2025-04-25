@@ -79,7 +79,7 @@ class СapsuleProcessor:
         def set_relatively_current_time(first_time, second_time = None):
             if second_time is None:
                 second_time = first_time
-            capsule_date['start_limit'] = first_time + datetime.timedelta(hours= UPDATE_START_AND_END_TIME, minutes=1)
+            capsule_date['start_limit'] = first_time + datetime.timedelta(hours= UPDATE_START_AND_END_TIME)
             capsule_date['end_limit'] = second_time + datetime.timedelta(hours= UPDATE_START_AND_END_TIME, minutes=15)
         UPDATE_START_AND_END_TIME = capsule_date['time_for_ea'] // capsule_date['time_break']
         if capsule_date.get('start_limit', False):
