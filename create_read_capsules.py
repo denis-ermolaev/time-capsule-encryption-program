@@ -38,7 +38,7 @@ args = parser.parse_args()
 
 class СapsuleProcessor:
     capsule_folder = "capsules"
-    fernet = Fernet(b'wHFZL4PMZMCtabcTThF5ySs4Ve5DpB87uirBOvEpqn0=') # TODO: нужно вставить ключ (Fernet.generate_key())
+    fernet = Fernet(b'') # TODO: нужно вставить ключ (Fernet.generate_key())
     def __init__(self, args: argparse.Namespace):
         # Namespace(create=['gfbgfb', '2025-04-17 14:00:00', 'True', '1', '3'], read=False, id=12)
         # Namespace(create=None, read=True, id=13)
@@ -79,8 +79,8 @@ class СapsuleProcessor:
         def set_relatively_current_time(first_time, second_time = None):
             if second_time is None:
                 second_time = first_time
-            capsule_date['start_limit'] = first_time + datetime.timedelta(minutes=1)
-            capsule_date['end_limit'] = second_time + datetime.timedelta(minutes=15)
+            capsule_date['start_limit'] = first_time + datetime.timedelta(hours= UPDATE_START_AND_END_TIME, minutes=1)
+            capsule_date['end_limit'] = second_time + datetime.timedelta(hours= UPDATE_START_AND_END_TIME, minutes=15)
         UPDATE_START_AND_END_TIME = capsule_date['time_for_ea'] // capsule_date['time_break']
         if capsule_date.get('start_limit', False):
             if self.current_time > capsule_date['start_limit'] and self.current_time < capsule_date['end_limit']: # Правильное Время
