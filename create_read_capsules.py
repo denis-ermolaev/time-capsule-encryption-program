@@ -20,9 +20,9 @@ parser = argparse.ArgumentParser(description= "Создание/Чтение к�
                                  запрашивается раньше, тогда проверяется экстренный доступ, если он False, тогда доступ к капсуле
                                  раньше времени получить нельзя, если True, то действует следующая система:
                                  1. После запроса экстренного доступа, нужно запустить программу с запросом чтения капсулы ещё раз в определённые часы
-                                 2. Если следующий запрос произведён не в нужные часы, то процесс экстренного доступа сбрасывается
-                                 3. Если в нужные, то назначается новое время следующего запроса экстренного доступа
-                                 4. В итоге доступ к капсуле будет получен, когда кол-во запросов будет равно число Разрывов при создании капсулы
+                                 2. Если следующий запрос произведён в неверные часы, то процесс экстренного доступа сбрасывается
+                                 3. Если в верные, то назначается новое время следующего запроса экстренного доступа
+                                 4. В итоге доступ к капсуле будет получен, когда кол-во запросов будет равно число разрывов при создании капсулы
                                  
                                  Пример:
                                  create_read_capsules.py 12 --create "gfbgfb" "2025-04-17 14:00:00" True 1 3
@@ -38,8 +38,8 @@ args = parser.parse_args()
 
 class СapsuleProcessor:
     capsule_folder = "capsules"
-    fernet = Fernet(b'') # TODO: нужно вставить ключ (Fernet.generate_key())
-    def __init__(self, args: argparse.Namespace):
+    fernet = Fernet(b'mUmBIZiveuafIs9Ew74ewInl3n2xwmqWI8YhCpoqDzw=') # TODO: нужно вставить ключ (Fernet.generate_key())
+    def __init__(self, args: argparse.Namespace) -> None:
         # Namespace(create=['gfbgfb', '2025-04-17 14:00:00', 'True', '1', '3'], read=False, id=12)
         # Namespace(create=None, read=True, id=13)
         self.for_reading = args.read
@@ -58,11 +58,13 @@ class СapsuleProcessor:
         if not os.path.exists(self.capsule_folder):
             os.mkdir(self.capsule_folder)
         
-        self.process_reading() if self.for_reading else self.process_creation()
-    def process_creation(self):
+        self.process_reading() if self.for_reading else self.process_creation() # Запуск обработки
+    def process_creation(self) -> None:
+        """Обработка записи капсулы"""
         self.write_capsule(self.create_args)
         self.create_console_output(status = "1")
-    def process_reading(self):
+    def process_reading(self) -> None:
+        """Обработка чтения капсулы, в случае экстренного доступа запуск ф-и run_emergency_access"""
         with open(f"{self.capsule_folder}/{str(self.id)}", 'rb') as file:
             decrypted_data = self.fernet.decrypt(file.read()).decode()
             # {'text': 'gfbgfb', 'open_time': '2025-04-17 14:00:00', 'emergency_access': True, 'time_for_ea': 1, 'time_break': 3}
@@ -75,13 +77,14 @@ class СapsuleProcessor:
                 self.run_emergency_access(capsule_date)
             else:
                 self.create_console_output(status = "1")
-    def run_emergency_access(self, capsule_date):
-        def set_relatively_current_time(first_time, second_time = None):
+    def run_emergency_access(self, capsule_date: dict) -> None:
+        """Обработка экстренного доступа"""
+        def set_start_and_end_time(first_time: datetime.datetime, second_time: datetime.datetime = None) -> None:
             if second_time is None:
                 second_time = first_time
+            UPDATE_START_AND_END_TIME = capsule_date['time_for_ea'] / capsule_date['time_break']
             capsule_date['start_limit'] = first_time + datetime.timedelta(hours= UPDATE_START_AND_END_TIME)
             capsule_date['end_limit'] = second_time + datetime.timedelta(hours= UPDATE_START_AND_END_TIME, minutes=15)
-        UPDATE_START_AND_END_TIME = capsule_date['time_for_ea'] // capsule_date['time_break']
         if capsule_date.get('start_limit', False):
             if self.current_time > capsule_date['start_limit'] and self.current_time < capsule_date['end_limit']: # Правильное Время
                 capsule_date['num_access'] += 1
@@ -89,24 +92,24 @@ class СapsuleProcessor:
                     self.create_console_output(status = "2", text = capsule_date['text'])
                     del capsule_date['num_access'], capsule_date['start_limit'], capsule_date['end_limit']
                 else: # Нужны ещё попытки захода, назначены новые времена захода
-                    set_relatively_current_time(capsule_date['start_limit'], capsule_date['end_limit'])
+                    set_start_and_end_time(capsule_date['start_limit'], capsule_date['end_limit'])
                     self.create_console_output(status = "3")
                     self.create_console_output(num_access = capsule_date['num_access'], start_limit = capsule_date['start_limit'], end_limit = capsule_date['end_limit'])
             else: # Правильное время пропущено, Новые дата начала и дата конца
-                set_relatively_current_time(self.current_time)
+                set_start_and_end_time(self.current_time)
                 capsule_date['num_access'] = 0
                 self.create_console_output(status = "4")
                 self.create_console_output(num_access = capsule_date['num_access'], start_limit = capsule_date['start_limit'], end_limit = capsule_date['end_limit'])
         else: # Назначены первоначальные времена захода
-            set_relatively_current_time(self.current_time)
+            set_start_and_end_time(self.current_time)
             capsule_date['num_access'] = 0
             self.create_console_output(status = "5")
             self.create_console_output(num_access = capsule_date['num_access'], start_limit = capsule_date['start_limit'], end_limit = capsule_date['end_limit'])
         capsule_date = self.deformat_dictionary(capsule_date)
         self.write_capsule(capsule_date)
-    def create_console_output(self, **kwargs):
+    def create_console_output(self, **kwargs) -> None:
         self.final_console_output |=  kwargs
-    def format_dictionary(self, dct: dict):
+    def format_dictionary(self, dct: dict) -> None:
         dct = dct.copy()
         dct['open_time'] = datetime.datetime.strptime(dct["open_time"], '%Y-%m-%d %H:%M:%S')
         dct['emergency_access'] = True if dct['emergency_access'] == 'True' else False
@@ -117,7 +120,7 @@ class СapsuleProcessor:
             dct['end_limit'] = datetime.datetime.strptime(dct["end_limit"], '%Y-%m-%d %H:%M:%S')
             dct['num_access'] = int(dct["num_access"])
         return dct
-    def deformat_dictionary(self, dct: dict):
+    def deformat_dictionary(self, dct: dict) -> None:
         dct = dct.copy()
         dct['open_time'] = str(dct["open_time"])
         dct['emergency_access'] = "True" if dct['emergency_access'] == True else "False"
@@ -125,12 +128,12 @@ class СapsuleProcessor:
             dct['start_limit'] = str(dct["start_limit"])
             dct['end_limit'] = str(dct["end_limit"])
         return dct
-    def write_capsule(self, save_date_dict):
+    def write_capsule(self, save_date_dict: dict) -> None:
         with open(f"{self.capsule_folder}/{str(self.id)}", "wb") as file:
             json_str = json.dumps(save_date_dict)
             encrypted_message = self.fernet.encrypt(json_str.encode())
             file.write(encrypted_message)
-    def show_final_console_output(self):
+    def show_final_console_output(self) -> None:
         """
         Первая строка, статус
         1 - Доступ запрещён, капсула не открыта ИЛИ успешное создание капсулы
