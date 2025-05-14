@@ -1,17 +1,137 @@
 import datetime
 import json
+from math import ceil
 from time import sleep
 from СapsuleProcessor import СapsuleProcessor
 import unittest
 from unittest.mock import Mock
 import random
+import tqdm
 
-# "Базовое создание, чтение. Только экстренный доступ"
+# "BaseReadCreateAndOnlyEA"
 # "opening_days_mode"
-MODE = "opening_days_mode"
+test_opening_days_mode = True
+baseReadCreateAndOnlyEA = True
+test_opening_days_mode_and_ea = True
+num_iterations = 30000
 
 
-@unittest.skipIf(MODE != "opening_days_mode", "Тест пропуcкаем")
+@unittest.skipIf(not test_opening_days_mode, "Тест пропуcкаем")
+class Test_opening_days_mode_and_ea(unittest.TestCase):
+    def test_12_create_close_days_mode_and_ea(self):
+        """В определённые дни opening_days_mode, если включен ea_after_open,
+        это означает, что только в определённые дни можно запросить экстренный доступ"""
+        attrs = {
+            "id": 7,
+            "read": False,
+            "create": [
+                "gfbgfb",
+                "2050-04-26 14:00:00",
+                "2025-04-26 14:00:00",
+            ],
+            "emergency": [
+                "true",
+                json.dumps([[[0.001, 0.001], "hidden"], [[0.001, 0.001], "open"]]),
+            ],
+            "opening_days_mode": ["m,t,w,th,f,sa,su", 0, "00:01", "23:59"],
+        }
+        args = Mock(**attrs)
+
+        capsule_processor = СapsuleProcessor(args)
+        self.assertEqual(capsule_processor.final_console_output["status"], "1")
+
+    def test_13_open_close_days_mode_and_ea(self):
+        attrs = {
+            "id": 7,
+            "read": True,
+            "create": None,
+            "emergency": None,
+            "opening_days_mode": None,
+        }
+        args = Mock(**attrs)
+
+        capsule_processor = СapsuleProcessor(args)
+        print(capsule_processor.final_console_output)
+        self.assertEqual(capsule_processor.final_console_output["status"], "1")
+        self.assertEqual(
+            capsule_processor.final_console_output["message"],
+            "Экстренный доступ откроется только после даты открытия капсулы",
+        )
+
+    def test_14_create_days_mode_and_ea(self):
+        """В определённые дни opening_days_mode, если включен ea_after_open,
+        это означает, что только в определённые дни можно запросить экстренный доступ"""
+        attrs = {
+            "id": 8,
+            "read": False,
+            "create": [
+                "gfbgfb",
+                "2010-04-26 14:00:00",
+                "2025-04-26 14:00:00",
+            ],
+            "emergency": [
+                "true",
+                json.dumps([[[0.001, 0.001], "hidden"], [[0.001, 0.001], "open"]]),
+            ],
+            "opening_days_mode": ["m,t,w,th,f,sa,su", 0, "00:01", "23:59"],
+        }
+        args = Mock(**attrs)
+
+        capsule_processor = СapsuleProcessor(args)
+        self.assertEqual(capsule_processor.final_console_output["status"], "1")
+
+    def test_15_open_days_mode_and_ea(self):
+        attrs = {
+            "id": 8,
+            "read": True,
+            "create": None,
+            "emergency": None,
+            "opening_days_mode": None,
+        }
+        args = Mock(**attrs)
+
+        capsule_processor = СapsuleProcessor(args)
+        print(capsule_processor.final_console_output)
+
+        # Заход в скрытое время, но он не сбрасывает время
+        capsule_processor = СapsuleProcessor(args)
+        self.assertEqual(capsule_processor.final_console_output["status"], "4")
+        self.assertEqual(
+            capsule_processor.final_console_output["message"],
+            "Время захода не верное, но время не сбрасывается, т.к оно hidden",
+        )
+        # После 3.6 получаем уже открытое время
+        sleep(4)
+        capsule_processor = СapsuleProcessor(args)
+        self.assertEqual(capsule_processor.final_console_output["status"], "3")
+        self.assertTrue(capsule_processor.final_console_output["start_limit"])
+        self.assertTrue(capsule_processor.final_console_output["end_limit"])
+
+        # Заходим в неправильное время и всё сбрасывается
+        capsule_processor = СapsuleProcessor(args)
+        print(capsule_processor.final_console_output)
+        self.assertEqual(capsule_processor.final_console_output["status"], "4")
+        self.assertEqual(
+            capsule_processor.final_console_output["message"],
+            "Время захода не верное, но время не сбрасывается, т.к оно hidden",
+        )
+
+        # Начинаем заново Т.к hidden время нам уже назначено, то ждём 4 сек
+        # После 3.6 получаем уже открытое время
+        sleep(4)
+        capsule_processor = СapsuleProcessor(args)
+        self.assertEqual(capsule_processor.final_console_output["status"], "3")
+        self.assertTrue(capsule_processor.final_console_output["start_limit"])
+        self.assertTrue(capsule_processor.final_console_output["end_limit"])
+
+        sleep(4)
+        capsule_processor = СapsuleProcessor(args)
+        print(capsule_processor.final_console_output)
+        self.assertEqual(capsule_processor.final_console_output["status"], "2")
+        self.assertTrue(capsule_processor.final_console_output["text"])
+
+
+@unittest.skipIf(not test_opening_days_mode, "Тест пропуcкаем")
 class Test_opening_days_mode(unittest.TestCase):
     def test_07_create_opening_days_mode_capsule(self):
         """Открытие капсулы, которая открывается практически всегда по opening_days_mode"""
@@ -78,29 +198,41 @@ class Test_opening_days_mode(unittest.TestCase):
         print(capsule_processor.final_console_output)
         self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
-    def test_11_create_opening_days_mode_capsule(self):
-        """Тест недели"""
-        num_week_odm = 1
-        current_datetime = datetime.datetime.now()
-        for i in range(2):
-            date_change = (
-                current_datetime - datetime.timedelta(days=7 * i + 7 * num_week_odm)
-            ).replace(microsecond=0)
-            print("date_change", date_change.replace(microsecond=0))
+    def test_11_opening_days_mode_capsule(self):
+        """Комплексный тест режима opening_days_mode"""
+        for i in tqdm.tqdm(range(num_iterations)):
+            current_datetime = datetime.datetime.now()
+            num_week_odm = random.randint(0, 100)
+            day_week_odm = ",".join(
+                [i for i in "m,t,w,th,f,sa,su".split(",") if random.randint(0, 1)]
+            )
+            date_change = datetime.datetime(
+                year=current_datetime.year - 1,
+                month=random.randint(1, 12),
+                day=random.randint(1, 25),
+                hour=random.randint(0, 23),  # Как легко сформировать случайную дату?
+                minute=random.randint(0, 59),
+                second=random.randint(0, 59),
+                microsecond=0,
+            )
+            time_odm_start = datetime.time(
+                hour=random.randint(0, 21), minute=random.randint(0, 59)
+            )
+            time_odm_end = time_odm_start.replace(hour=time_odm_start.hour + 1)
             attrs = {
-                "id": 5,
+                "id": 6,
                 "read": False,
                 "create": [
                     "gfbgfb",
-                    "2010-04-26 14:00:00",
+                    "2010-04-26 14:05:05",
                     str(date_change),
                 ],
                 "emergency": None,
                 "opening_days_mode": [
-                    "m,t,w,th,f,sa,su",
+                    day_week_odm,
                     num_week_odm,
-                    "00:01",
-                    "23:59",
+                    str(time_odm_start)[:-3],
+                    str(time_odm_end)[:-3],
                 ],
             }
             args = Mock(**attrs)
@@ -109,7 +241,7 @@ class Test_opening_days_mode(unittest.TestCase):
             self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
             attrs = {
-                "id": 5,
+                "id": 6,
                 "read": True,
                 "create": None,
                 "emergency": None,
@@ -118,20 +250,80 @@ class Test_opening_days_mode(unittest.TestCase):
             args = Mock(**attrs)
 
             capsule_processor = СapsuleProcessor(args)
-            print(capsule_processor.final_console_output)
-            if i == 0:
-                self.assertEqual(capsule_processor.final_console_output["status"], "2")
-                self.assertTrue(
-                    capsule_processor.final_console_output["text"], "gfbgfb"
+
+            DAYNAMES = [
+                None,
+                "m",
+                "t",
+                "w",
+                "th",
+                "f",
+                "sa",
+                "su",
+            ]  # m,t,w,th,f,sa,su
+            weekday = DAYNAMES[
+                current_datetime.toordinal() % 7 or 7
+            ]  # Текущий день недели
+            now_time = current_datetime.time().replace(second=0, microsecond=0)  # Время
+
+            start_point = date_change - datetime.timedelta(
+                days=(date_change.toordinal() % 7 or 7) - 1
+            )
+            end_point = current_datetime - datetime.timedelta(
+                days=(current_datetime.toordinal() % 7 or 7) - 1
+            )
+
+            is_correct_week = (
+                (ceil(int((end_point - start_point).days) / 7) + 1) % (num_week_odm + 1)
+            ) == 0  # Неделя для открытия по opening_days_mode
+
+            if (
+                weekday in day_week_odm
+                and is_correct_week
+                and now_time >= time_odm_start
+                and now_time <= time_odm_end
+            ):
+                self.assertEqual(
+                    capsule_processor.final_console_output["status"],
+                    "2",
+                    msg={
+                        "attrs": attrs,
+                        "now_time": now_time,
+                        "time_odm_start": time_odm_start,
+                        "time_odm_end": time_odm_end,
+                        "is_correct_week": is_correct_week,
+                        "weekday": weekday,
+                        "num_week_odm": num_week_odm,
+                        "day_week_odm": day_week_odm,
+                        "date_change": date_change,
+                        "capsule_processor.final_console_output": capsule_processor.final_console_output,
+                    },
+                )
+                self.assertTrue(capsule_processor.final_console_output["text"])
+                print(
+                    "capsule_processor.final_console_output",
+                    capsule_processor.final_console_output,
+                )
+            else:
+                self.assertEqual(
+                    capsule_processor.final_console_output["status"],
+                    "1",
+                    msg={
+                        "attrs": attrs,
+                        "now_time": now_time,
+                        "time_odm_start": time_odm_start,
+                        "time_odm_end": time_odm_end,
+                        "is_correct_week": is_correct_week,
+                        "weekday": weekday,
+                        "num_week_odm": num_week_odm,
+                        "day_week_odm": day_week_odm,
+                        "date_change": date_change,
+                        "capsule_processor.final_console_output": capsule_processor.final_console_output,
+                    },
                 )
 
-            else:
-                self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
-
-@unittest.skipIf(
-    MODE != "Базовое создание, чтение. Только экстренный доступ", "Тест пропуcкаем"
-)
+@unittest.skipIf(not baseReadCreateAndOnlyEA, "Тест пропуcкаем")
 class BaseReadCreateAndOnlyEA(unittest.TestCase):
     def test_01_create_open_capsule(self):
         attrs = {

@@ -10,7 +10,7 @@ log_format = (
     "%(asctime)s::%(levelname)s::%(name)s::%(filename)s::%(lineno)d::  %(message)s"
 )
 logger: logging.Logger = logging.getLogger(__name__)
-logging.basicConfig(level=0, format=log_format)
+logging.basicConfig(level=100, format=log_format)
 
 
 class СapsuleProcessor:
@@ -101,30 +101,17 @@ class СapsuleProcessor:
                 weekday = DAYNAMES[
                     self.current_time.toordinal() % 7 or 7
                 ]  # Текущий день недели
-                now_time = self.current_time.time()  # Время
-                date_change_weekday = DAYNAMES[
-                    capsule_date["date_change"].toordinal() % 7 or 7
-                ]  # Текущий день недели
-                start_point = capsule_date["date_change"].replace(
-                    day=capsule_date["date_change"].day
-                    - (
-                        capsule_date["date_change"]
-                        - capsule_date["date_change"].replace(
-                            day=capsule_date["date_change"].day
-                            - ((capsule_date["date_change"].toordinal() % 7 or 7) - 1)
-                        )
-                    ).days
+                now_time = self.current_time.time().replace(
+                    second=0, microsecond=0
+                )  # Время
+
+                start_point = capsule_date["date_change"] - datetime.timedelta(
+                    days=(capsule_date["date_change"].toordinal() % 7 or 7) - 1
                 )
-                end_point = self.current_time.replace(
-                    day=self.current_time.day
-                    - (
-                        self.current_time
-                        - self.current_time.replace(
-                            day=self.current_time.day
-                            - ((self.current_time.toordinal() % 7 or 7) - 1)
-                        )
-                    ).days
+                end_point = self.current_time - datetime.timedelta(
+                    days=(self.current_time.toordinal() % 7 or 7) - 1
                 )
+
                 is_correct_week = (
                     (ceil(int((end_point - start_point).days) / 7) + 1)
                     % (capsule_date["num_week_odm"] + 1)
@@ -340,8 +327,8 @@ class СapsuleProcessor:
         if dct["opening_days_mode"]:
             dct["day_week_odm"] = ",".join(dct["day_week_odm"])
             dct["num_week_odm"] = str(dct["num_week_odm"])
-            dct["time_odm_start"] = str(dct["num_week_odm"])
-            dct["time_odm_end"] = str(dct["time_odm_end"])
+            dct["time_odm_start"] = str(dct["num_week_odm"])[:-3]
+            dct["time_odm_end"] = str(dct["time_odm_end"])[:-3]
         dct["opening_days_mode"] = (
             "true" if dct["opening_days_mode"] == True else "false"
         )
