@@ -1,97 +1,16 @@
-from email import message
 import os
 import datetime
 from cryptography.fernet import Fernet
-import argparse
 import json
 import logging
-
+from math import ceil
+import random
 
 log_format = (
     "%(asctime)s::%(levelname)s::%(name)s::%(filename)s::%(lineno)d::  %(message)s"
 )
 logger: logging.Logger = logging.getLogger(__name__)
 logging.basicConfig(level=0, format=log_format)
-
-# Тестовый запуск создания
-# python create_read_capsules_v2.py 1 --create "gfbgfb" "2025-04-26 14:00:00" "2025-04-26 14:00:00"
-# python create_read_capsules_v2.py 2 --create "gfbgfb" "2025-04-17 14:00:00" "2025-04-26 14:00:00" --emergency true '[[[0.1, 0.2], "hidden"], [[0.1, 0.2] , "open"]]'
-# python create_read_capsules_v2.py 2 --create "gfbgfb" "2025-04-17 14:00:00" "2025-04-26 14:00:00" --emergency true '[[[0.1, 0.2], "hidden"], [[0.1, 0.2] , "open"]]' --opening_days_mode "m,t,w" 2 "12:00" "13:00"
-
-# Тестовый запуск открытия
-# python create_read_capsules_v2.py 1 --read
-# python create_read_capsules_v2.py 2 --read
-
-#! Возможные аргументы
-# id
-
-# * Либо --read либо --create. В случае с --create, доп аргументы:
-
-# text Текст
-# date_open Дата-Время после которых открытие (2025-04-17 14:00:00)
-# date_change - Последний, с него считаются недели для opening_days_mode
-
-# * Флаг --emergency
-# ea_after_open(true false) ЭД доступен только после времени открытия(Т.е открытие просто так не работает)
-# ea_time_separation - [ [ [1, 1], 'hidden'], [ [1, 5] , 'open'], [ [0.5,0.5], 'open'] ] - json
-# Работает так, в начале первый запрос экстренного доступа, выбирается случайное число от 1 до 1 часа
-# Причём время захода сказано не будет, т.е надо переодически заходить проверять
-# Дальше от 1 до 5 часов, нужно подождать, время будет дано конкретное, если зайти в другое, то сброс и так далее
-
-
-# * Флаг --opening_days_mode
-# day_week_odm - m,t,w,th,f,sa,su - дни недели, когда капсулу можно открыть
-# num_week_odm - раз в сколько недель. Если 0, то каждую неделю
-# time_odm_start - С этого времени 12:00
-# time_odm_end - До этого времени 13:00
-
-
-parser = argparse.ArgumentParser(
-    description="Создание/Чтение капсул времени, можно использовать либо --read, либо --create",
-    usage="""
-                                 Позволяет создать или открыть зашифрованную капсулу времени
-                                 Доступ к капсуле можно получить, после даты-времени открытия, если доступ
-                                 запрашивается раньше, тогда проверяется экстренный доступ, если он False, тогда доступ к капсуле
-                                 раньше времени получить нельзя, если True, то действует следующая система:
-                                 1. После запроса экстренного доступа, нужно запустить программу с запросом чтения капсулы ещё раз в определённые часы
-                                 2. Если следующий запрос произведён в неверные часы, то процесс экстренного доступа сбрасывается
-                                 3. Если в верные, то назначается новое время следующего запроса экстренного доступа
-                                 4. В итоге доступ к капсуле будет получен, когда кол-во запросов будет равно число разрывов при создании капсулы
-                                 
-                                 Пример:
-                                 create_read_capsules.py 12 --create "gfbgfb" "2025-04-17 14:00:00" True 1 3
-                                 create_read_capsules.py 13 --read
-                                 """,
-)
-group_create = parser.add_mutually_exclusive_group()
-group_create.add_argument(
-    "--create",
-    nargs=3,
-    help="text, date_open, date_change",
-)
-parser.add_argument(
-    "--emergency",
-    nargs=2,
-    help="ea_after_open(true,false) ea_time_separation",
-)
-parser.add_argument(
-    "--opening_days_mode",
-    nargs=4,
-    help="day_week_odm, num_week_odm, time_odm_start, time_odm_end",
-)
-group_create.add_argument(
-    "--read",
-    action="store_true",
-    help="Для чтения капсулы --read, для создания --create с 2-тью аргументами и --emergency --opening_days_mode",
-)
-parser.add_argument(
-    "id",
-    type=int,
-    help="Не зависимо от чтения или создания, нужно id, это имя файла капсулы",
-)
-args = parser.parse_args()
-
-logger.debug(("Были получены следующие аргументы", args, type(args)))
 
 
 class СapsuleProcessor:
@@ -100,7 +19,7 @@ class СapsuleProcessor:
         b"6Q22tkQ83AoK6ml7GDS-s4JqErokcX_QpEWys2k9BTQ="
     )  # TODO: нужно вставить ключ (Fernet.generate_key())
 
-    def __init__(self, args: argparse.Namespace) -> None:
+    def __init__(self, args) -> None:
         # Namespace(create=['gfbgfb', '2025-04-17 14:00:00', 'True', '1', '3'], read=False, id=12)
         # Namespace(create=None, read=True, id=13)
         self.for_reading = args.read
@@ -168,50 +87,61 @@ class СapsuleProcessor:
             )  # loads - из строки, load из файла, аналогично dumps и dump
             logger.debug(("Начало чтения", capsule_date))
 
-            DAYNAMES = [None, "m", "t", "w", "th", "f", "sa", "su"]  # m,t,w,th,f,sa,su
-            weekday = DAYNAMES[
-                self.current_time.toordinal() % 7 or 7
-            ]  # Текущий день недели
-            now_time = self.current_time.time()  # Время
-            print(capsule_date["day_week_odm"], weekday)
-
-            print(capsule_date["date_change"])
-            date_change_weekday = DAYNAMES[
-                capsule_date["date_change"].toordinal() % 7 or 7
-            ]  # Текущий день недели
-            print(date_change_weekday)
-            week_index = capsule_date["date_change"].toordinal() % 7 or 7
-            # 2025-05-14 среда, 3
-            start_count_week = capsule_date["date_change"] - capsule_date[
-                "date_change"
-            ].replace(day=capsule_date["date_change"].day - (week_index - 1))
-            print("start_count_week", start_count_week)
-            start_point = capsule_date["date_change"].replace(
-                day=capsule_date["date_change"].day - start_count_week.days
-            )
-            end_point = self.current_time.replace(
-                day=self.current_time.day
-                - (
-                    self.current_time
-                    - self.current_time.replace(
-                        day=self.current_time.day
-                        - ((self.current_time.toordinal() % 7 or 7) - 1)
-                    )
-                ).days
-            )
-            x = round(int((end_point - start_point).days) / 7)
+            if capsule_date["opening_days_mode"]:
+                DAYNAMES = [
+                    None,
+                    "m",
+                    "t",
+                    "w",
+                    "th",
+                    "f",
+                    "sa",
+                    "su",
+                ]  # m,t,w,th,f,sa,su
+                weekday = DAYNAMES[
+                    self.current_time.toordinal() % 7 or 7
+                ]  # Текущий день недели
+                now_time = self.current_time.time()  # Время
+                date_change_weekday = DAYNAMES[
+                    capsule_date["date_change"].toordinal() % 7 or 7
+                ]  # Текущий день недели
+                start_point = capsule_date["date_change"].replace(
+                    day=capsule_date["date_change"].day
+                    - (
+                        capsule_date["date_change"]
+                        - capsule_date["date_change"].replace(
+                            day=capsule_date["date_change"].day
+                            - ((capsule_date["date_change"].toordinal() % 7 or 7) - 1)
+                        )
+                    ).days
+                )
+                end_point = self.current_time.replace(
+                    day=self.current_time.day
+                    - (
+                        self.current_time
+                        - self.current_time.replace(
+                            day=self.current_time.day
+                            - ((self.current_time.toordinal() % 7 or 7) - 1)
+                        )
+                    ).days
+                )
+                is_correct_week = (
+                    (ceil(int((end_point - start_point).days) / 7) + 1)
+                    % (capsule_date["num_week_odm"] + 1)
+                ) == 0  # Неделя для открытия по opening_days_mode
 
             if (
                 self.current_time > capsule_date["open_time"]
                 and not capsule_date["opening_days_mode"]
-                and not capsule_date["ea_after_open"]
+                and not capsule_date.get("ea_after_open", False)
             ):
                 self.create_console_output(status="2", text=capsule_date["text"])
             elif (
                 capsule_date["opening_days_mode"] == True
                 and self.current_time > capsule_date["open_time"]
-                and not capsule_date["ea_after_open"]
+                and not capsule_date.get("ea_after_open", False)
                 and weekday in capsule_date["day_week_odm"]
+                and is_correct_week
                 and now_time >= capsule_date["time_odm_start"]
                 and now_time <= capsule_date["time_odm_end"]
             ):
@@ -219,23 +149,35 @@ class СapsuleProcessor:
             elif (
                 capsule_date["opening_days_mode"] == True
                 and self.current_time > capsule_date["open_time"]
-                and capsule_date["ea_after_open"]
+                and capsule_date.get(
+                    "ea_after_open", False
+                )  # В случае режима ea_after_open, в нужный день в нужное время, можно запустить экстренный доступ
                 and weekday in capsule_date["day_week_odm"]
+                and is_correct_week
                 and now_time >= capsule_date["time_odm_start"]
                 and now_time <= capsule_date["time_odm_end"]
             ):
-                capsule_date["opening_days_mode"] == "ea_turn_on"
-                self.run_emergency_access(capsule_date)
+                capsule_date["opening_days_mode"] = (
+                    "ea_turn_on"  # Чтобы в следующий раз уже не нужно было правильное время режима ODM
+                )
+                self.run_emergency_access(
+                    capsule_date
+                )  # TODO: По идее тут сохранится opening_days_mode = "ea_turn_on", но потом этот режим надо будет убрать
             elif (
                 capsule_date["emergency_access"]
-                and (not capsule_date["ea_after_open"])
-                or (
-                    capsule_date["ea_after_open"]
-                    and self.current_time > capsule_date["open_time"]
+                and (
+                    capsule_date["opening_days_mode"] == False
+                    or capsule_date["opening_days_mode"] == "ea_turn_on"
+                )
+                and (
+                    not capsule_date["ea_after_open"]
+                    or (
+                        capsule_date["ea_after_open"]
+                        and self.current_time > capsule_date["open_time"]
+                    )
                 )
             ):
                 self.run_emergency_access(capsule_date)
-
             elif (
                 capsule_date["emergency_access"]
                 and capsule_date["ea_after_open"]
@@ -256,15 +198,20 @@ class СapsuleProcessor:
         ) -> None:
             if second_time is None:
                 second_time = first_time
-            UPDATE_START_AND_END_TIME = (
-                capsule_date["time_for_ea"] / capsule_date["time_break"]
+            hours = random.uniform(
+                capsule_date["ea_time_separation"][capsule_date.get("num_access", 0)][
+                    0
+                ][0],
+                capsule_date["ea_time_separation"][capsule_date.get("num_access", 0)][
+                    0
+                ][1],
             )
-            capsule_date["start_limit"] = first_time + datetime.timedelta(
-                hours=UPDATE_START_AND_END_TIME
-            )
-            capsule_date["end_limit"] = second_time + datetime.timedelta(
-                hours=UPDATE_START_AND_END_TIME, minutes=15
-            )
+            capsule_date["start_limit"] = (
+                first_time + datetime.timedelta(hours=hours)
+            ).replace(microsecond=0)
+            capsule_date["end_limit"] = (
+                second_time + datetime.timedelta(hours=hours, minutes=10)
+            ).replace(microsecond=0)
 
         if capsule_date.get("start_limit", False):
             if (
@@ -272,10 +219,12 @@ class СapsuleProcessor:
                 and self.current_time < capsule_date["end_limit"]
             ):  # Правильное Время
                 capsule_date["num_access"] += 1
-                if (
-                    capsule_date["num_access"] == capsule_date["time_break"]
+                if capsule_date["num_access"] == len(
+                    capsule_date["ea_time_separation"]
                 ):  # Капсула открыта т.к собралось нужное кол-во запросов
                     self.create_console_output(status="2", text=capsule_date["text"])
+                    if capsule_date.get("opening_days_mode") == "ea_turn_on":
+                        capsule_date["opening_days_mode"] = True
                     del (
                         capsule_date["num_access"],
                         capsule_date["start_limit"],
@@ -285,30 +234,68 @@ class СapsuleProcessor:
                     set_start_and_end_time(
                         capsule_date["start_limit"], capsule_date["end_limit"]
                     )
-                    self.create_console_output(status="3")
+                    if (
+                        capsule_date["ea_time_separation"][
+                            capsule_date.get("num_access", 0)
+                        ][1]
+                        == "hidden"
+                    ):
+                        self.create_console_output(
+                            status="3", message="Время скрыто, оно не показывается"
+                        )
+                    else:
+                        self.create_console_output(status="3")
+                        self.create_console_output(
+                            num_access=capsule_date["num_access"],
+                            start_limit=capsule_date["start_limit"],
+                            end_limit=capsule_date["end_limit"],
+                        )
+            elif (
+                capsule_date["ea_time_separation"][capsule_date.get("num_access", 0)][1]
+                == "hidden"
+            ):
+                self.create_console_output(
+                    status="4",
+                    message="Время захода не верное, но время не сбрасывается, т.к оно hidden",
+                )
+            else:  # Правильное время пропущено, Новые дата начала и дата конца
+                set_start_and_end_time(self.current_time)
+                capsule_date["num_access"] = 0
+                if capsule_date.get("opening_days_mode") == "ea_turn_on":
+                    capsule_date["opening_days_mode"] = True
                     self.create_console_output(
+                        status="4",
+                        message="Время захода сброшено, вы сможете войти только в соотвествии с режимом opening_days_mode",
+                    )
+                elif capsule_date["ea_time_separation"][0][1] == "hidden":
+                    self.create_console_output(
+                        status="4",
+                        message="Время захода не верное, но время не сбрасывается, т.к оно hidden",
+                    )
+                else:
+                    self.create_console_output(
+                        status="4",
                         num_access=capsule_date["num_access"],
                         start_limit=capsule_date["start_limit"],
                         end_limit=capsule_date["end_limit"],
                     )
-            else:  # Правильное время пропущено, Новые дата начала и дата конца
-                set_start_and_end_time(self.current_time)
-                capsule_date["num_access"] = 0
-                self.create_console_output(status="4")
+        else:  # Назначены первоначальные времена захода
+            set_start_and_end_time(self.current_time)
+            capsule_date["num_access"] = 0
+            if (
+                capsule_date["ea_time_separation"][capsule_date.get("num_access", 0)][1]
+                == "hidden"
+            ):
                 self.create_console_output(
+                    status="5", message="Время скрыто и не показывается"
+                )
+            else:
+                self.create_console_output(
+                    status="5",
                     num_access=capsule_date["num_access"],
                     start_limit=capsule_date["start_limit"],
                     end_limit=capsule_date["end_limit"],
                 )
-        else:  # Назначены первоначальные времена захода
-            set_start_and_end_time(self.current_time)
-            capsule_date["num_access"] = 0
-            self.create_console_output(status="5")
-            self.create_console_output(
-                num_access=capsule_date["num_access"],
-                start_limit=capsule_date["start_limit"],
-                end_limit=capsule_date["end_limit"],
-            )
         capsule_date = self.deformat_dictionary(capsule_date)
         self.write_capsule(capsule_date)
 
@@ -404,7 +391,3 @@ class СapsuleProcessor:
             print(self.final_console_output["num_access"])
             print(self.final_console_output["start_limit"])
             print(self.final_console_output["end_limit"])
-
-
-capsule_processor = СapsuleProcessor(args)
-capsule_processor.show_final_console_output()
