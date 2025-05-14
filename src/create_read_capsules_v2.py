@@ -1,5 +1,5 @@
 import argparse
-from СapsuleProcessor import СapsuleProcessor, logger
+from src.CapsuleProcessor import СapsuleProcessor, logger
 
 # Тестовый запуск создания
 # python src/create_read_capsules_v2.py 1 --create "gfbgfb" "2025-04-26 14:00:00" "2025-04-26 14:00:00"

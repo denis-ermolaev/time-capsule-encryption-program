@@ -2,7 +2,7 @@ import datetime
 import json
 from math import ceil
 from time import sleep
-from СapsuleProcessor import СapsuleProcessor
+from src.CapsuleProcessor import СapsuleProcessor
 import unittest
 from unittest.mock import Mock
 import random
@@ -52,11 +52,7 @@ class Test_opening_days_mode_and_ea(unittest.TestCase):
 
         capsule_processor = СapsuleProcessor(args)
         print(capsule_processor.final_console_output)
-        self.assertEqual(capsule_processor.final_console_output["status"], "1")
-        self.assertEqual(
-            capsule_processor.final_console_output["message"],
-            "Экстренный доступ откроется только после даты открытия капсулы",
-        )
+        self.assertEqual(capsule_processor.final_console_output["status"], "8")
 
     def test_14_create_days_mode_and_ea(self):
         """В определённые дни opening_days_mode, если включен ea_after_open,
@@ -95,11 +91,7 @@ class Test_opening_days_mode_and_ea(unittest.TestCase):
 
         # Заход в скрытое время, но он не сбрасывает время
         capsule_processor = СapsuleProcessor(args)
-        self.assertEqual(capsule_processor.final_console_output["status"], "4")
-        self.assertEqual(
-            capsule_processor.final_console_output["message"],
-            "Время захода не верное, но время не сбрасывается, т.к оно hidden",
-        )
+        self.assertEqual(capsule_processor.final_console_output["status"], "6")
         # После 3.6 получаем уже открытое время
         sleep(4)
         capsule_processor = СapsuleProcessor(args)
@@ -110,11 +102,7 @@ class Test_opening_days_mode_and_ea(unittest.TestCase):
         # Заходим в неправильное время и всё сбрасывается
         capsule_processor = СapsuleProcessor(args)
         print(capsule_processor.final_console_output)
-        self.assertEqual(capsule_processor.final_console_output["status"], "4")
-        self.assertEqual(
-            capsule_processor.final_console_output["message"],
-            "Время захода не верное, но время не сбрасывается, т.к оно hidden",
-        )
+        self.assertEqual(capsule_processor.final_console_output["status"], "6")
 
         # Начинаем заново Т.к hidden время нам уже назначено, то ждём 4 сек
         # После 3.6 получаем уже открытое время
@@ -417,18 +405,10 @@ class BaseReadCreateAndOnlyEA(unittest.TestCase):
         # Назначено скрытое время
         capsule_processor = СapsuleProcessor(args)
         print(capsule_processor.final_console_output)
-        self.assertEqual(capsule_processor.final_console_output["status"], "5")
-        self.assertEqual(
-            capsule_processor.final_console_output["message"],
-            "Время скрыто и не показывается",
-        )
+        self.assertEqual(capsule_processor.final_console_output["status"], "6")
         # Заход в скрытое время, но он не сбрасывает время
         capsule_processor = СapsuleProcessor(args)
-        self.assertEqual(capsule_processor.final_console_output["status"], "4")
-        self.assertEqual(
-            capsule_processor.final_console_output["message"],
-            "Время захода не верное, но время не сбрасывается, т.к оно hidden",
-        )
+        self.assertEqual(capsule_processor.final_console_output["status"], "6")
         # После 3.6 получаем уже открытое время
         sleep(4)
         capsule_processor = СapsuleProcessor(args)
@@ -439,11 +419,7 @@ class BaseReadCreateAndOnlyEA(unittest.TestCase):
         # Заходим в неправильное время и всё сбрасывается
         capsule_processor = СapsuleProcessor(args)
         print(capsule_processor.final_console_output)
-        self.assertEqual(capsule_processor.final_console_output["status"], "4")
-        self.assertEqual(
-            capsule_processor.final_console_output["message"],
-            "Время захода не верное, но время не сбрасывается, т.к оно hidden",
-        )
+        self.assertEqual(capsule_processor.final_console_output["status"], "6")
 
         # Начинаем занова Т.к hidden время нам уже назначено, то ждём 4 сек
         # После 3.6 получаем уже открытое время

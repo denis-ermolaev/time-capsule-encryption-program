@@ -15,9 +15,7 @@ logging.basicConfig(level=100, format=log_format)
 
 class СapsuleProcessor:
     capsule_folder = "capsules"
-    fernet = Fernet(
-        b"6Q22tkQ83AoK6ml7GDS-s4JqErokcX_QpEWys2k9BTQ="
-    )  # TODO: нужно вставить ключ (Fernet.generate_key())
+    fernet = Fernet(b"")  # TODO: нужно вставить ключ (Fernet.generate_key())
 
     def __init__(self, args) -> None:
         # Namespace(create=['gfbgfb', '2025-04-17 14:00:00', 'True', '1', '3'], read=False, id=12)
@@ -170,10 +168,7 @@ class СapsuleProcessor:
                 and capsule_date["ea_after_open"]
                 and self.current_time < capsule_date["open_time"]
             ):
-                self.create_console_output(
-                    status="1",
-                    message="Экстренный доступ откроется только после даты открытия капсулы",
-                )
+                self.create_console_output(status="8")
             else:
                 self.create_console_output(status="1")
 
@@ -227,9 +222,7 @@ class СapsuleProcessor:
                         ][1]
                         == "hidden"
                     ):
-                        self.create_console_output(
-                            status="3", message="Время скрыто, оно не показывается"
-                        )
+                        self.create_console_output(status="6")
                     else:
                         self.create_console_output(status="3")
                         self.create_console_output(
@@ -241,24 +234,15 @@ class СapsuleProcessor:
                 capsule_date["ea_time_separation"][capsule_date.get("num_access", 0)][1]
                 == "hidden"
             ):
-                self.create_console_output(
-                    status="4",
-                    message="Время захода не верное, но время не сбрасывается, т.к оно hidden",
-                )
+                self.create_console_output(status="6")
             else:  # Правильное время пропущено, Новые дата начала и дата конца
                 set_start_and_end_time(self.current_time)
                 capsule_date["num_access"] = 0
                 if capsule_date.get("opening_days_mode") == "ea_turn_on":
                     capsule_date["opening_days_mode"] = True
-                    self.create_console_output(
-                        status="4",
-                        message="Время захода сброшено, вы сможете войти только в соотвествии с режимом opening_days_mode",
-                    )
+                    self.create_console_output(status="7")
                 elif capsule_date["ea_time_separation"][0][1] == "hidden":
-                    self.create_console_output(
-                        status="4",
-                        message="Время захода не верное, но время не сбрасывается, т.к оно hidden",
-                    )
+                    self.create_console_output(status="6")
                 else:
                     self.create_console_output(
                         status="4",
@@ -273,9 +257,7 @@ class СapsuleProcessor:
                 capsule_date["ea_time_separation"][capsule_date.get("num_access", 0)][1]
                 == "hidden"
             ):
-                self.create_console_output(
-                    status="5", message="Время скрыто и не показывается"
-                )
+                self.create_console_output(status="6")
             else:
                 self.create_console_output(
                     status="5",
@@ -357,6 +339,9 @@ class СapsuleProcessor:
         3 - Экстренный доступ, + 1 попытка
         4 - время захода не правильное
         5 - экстренный доступ запрошен, время назначено
+        6 - экстренный доступ запрошен, время скрыто и не показывается
+        7 - экстренный доступ сброшен Используется когда ЭД не реализовался при режиме opening_days_mode
+        8 - Экстренный доступ откроется только после даты открытия капсулы
         """
         if self.final_console_output["status"] == "1":
             print("1")
@@ -378,3 +363,9 @@ class СapsuleProcessor:
             print(self.final_console_output["num_access"])
             print(self.final_console_output["start_limit"])
             print(self.final_console_output["end_limit"])
+        elif self.final_console_output["status"] == "6":
+            print("6")
+        elif self.final_console_output["status"] == "7":
+            print("7")
+        elif self.final_console_output["status"] == "8":
+            print("8")
