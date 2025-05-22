@@ -1,7 +1,6 @@
 import os
 import datetime
 from typing import (
-    Any,
     Literal,
     NotRequired,
     Protocol,
@@ -72,11 +71,12 @@ class FormatData(TypedDict):
 
 
 class FunalOutputType(TypedDict):
-    status: str
+    status: NotRequired[str]
     text: NotRequired[str]
     num_access: NotRequired[int]
     start_limit: NotRequired[str]
     end_limit: NotRequired[str]
+    encrypted_capsule: NotRequired[str]
 
 
 type day_week_tuple_type = tuple[
@@ -101,9 +101,13 @@ class СapsuleProcessor:
         b"2eVh78Xw4idGoMzrZcKVdesQzwKH3HVMIVfVVBqd2ME="
     )  # TODO: нужно вставить ключ (Fernet.generate_key())
 
-    def __init__(self, args: ArgsProto) -> None:
+    def __init__(
+        self, args: ArgsProto, without_file: bool = False, encrypted_capsule: str = ""
+    ) -> None:
         # Namespace(create=['gfbgfb', '2025-04-17 14:00:00', 'True', '1', '3'], read=False, id=12)
         # Namespace(create=None, read=True, id=13)
+        self.without_file = without_file
+        self.encrypted_capsule = encrypted_capsule
         if args.create:
             self.create_capsule: UnformatData = {
                 "text": args.create[0],
@@ -123,10 +127,10 @@ class СapsuleProcessor:
                 self.create_capsule["time_odm_start"] = str(args.opening_days_mode[2])
                 self.create_capsule["time_odm_end"] = str(args.opening_days_mode[3])
         self.for_reading = args.read
-        self.id = args.id
 
+        self.id = args.id
         self.current_time = datetime.datetime.now().replace(microsecond=0)
-        self.final_console_output: dict[str, Any] = {}
+        self.final_console_output: FunalOutputType = {}
 
         if not os.path.exists(self.capsule_folder):
             os.mkdir(self.capsule_folder)
@@ -141,53 +145,61 @@ class СapsuleProcessor:
 
     def process_reading(self) -> None:
         """Обработка чтения капсулы, в случае экстренного доступа запуск ф-и run_emergency_access"""
-        with open(f"{self.capsule_folder}/{str(self.id)}", "rb") as file:
+        if self.without_file == False:
+            with open(f"{self.capsule_folder}/{str(self.id)}", "rb") as file:
 
-            decrypted_data = self.fernet.decrypt(file.read()).decode()
+                decrypted_data = self.fernet.decrypt(file.read()).decode()
+                json_loads: UnformatData = json.loads(decrypted_data)
+                capsule_date = self.format_dictionary(
+                    json_loads
+                )  # loads - из строки, load из файла, аналогично dumps и dump
+                logger.debug(("Начало чтения", capsule_date))
+        else:
+            decrypted_data = self.fernet.decrypt(self.encrypted_capsule).decode()
             json_loads: UnformatData = json.loads(decrypted_data)
             capsule_date = self.format_dictionary(
                 json_loads
             )  # loads - из строки, load из файла, аналогично dumps и dump
             logger.debug(("Начало чтения", capsule_date))
 
-            if (
+        if (
+            self.current_time > capsule_date["open_time"]
+            and capsule_date["opening_days_mode"] == False
+            and capsule_date["emergency_access"] == False
+        ):
+            logger.debug("Капсула открылась по времени, других режимов нет")
+            self.create_console_output(status="2", text=capsule_date["text"])
+        elif (
+            capsule_date["opening_days_mode"] == False
+            and capsule_date["emergency_access"] == True
+            and (
                 self.current_time > capsule_date["open_time"]
-                and capsule_date["opening_days_mode"] == False
-                and capsule_date["emergency_access"] == False
-            ):
-                logger.debug("Капсула открылась по времени, других режимов нет")
-                self.create_console_output(status="2", text=capsule_date["text"])
-            elif (
-                capsule_date["opening_days_mode"] == False
-                and capsule_date["emergency_access"] == True
-                and (
-                    self.current_time > capsule_date["open_time"]
-                    or (
-                        "ea_after_open" in capsule_date
-                        and capsule_date["ea_after_open"] == False
-                    )
+                or (
+                    "ea_after_open" in capsule_date
+                    and capsule_date["ea_after_open"] == False
                 )
-            ):
-                logger.debug("Запущен экстренных доступ, режима odm нет")
-                self.run_emergency_access(capsule_date)
-            elif (
-                self.current_time > capsule_date["open_time"]
-                and capsule_date["opening_days_mode"] == True
-                and capsule_date["emergency_access"] == False
-            ):
-                logger.debug("Запущен режим получения доступа в определённые дни(odm)")
-                self.run_opening_days_mode(capsule_date)
+            )
+        ):
+            logger.debug("Запущен экстренных доступ, режима odm нет")
+            self.run_emergency_access(capsule_date)
+        elif (
+            self.current_time > capsule_date["open_time"]
+            and capsule_date["opening_days_mode"] == True
+            and capsule_date["emergency_access"] == False
+        ):
+            logger.debug("Запущен режим получения доступа в определённые дни(odm)")
+            self.run_opening_days_mode(capsule_date)
 
-            elif (
-                capsule_date["opening_days_mode"] == True
-                and capsule_date["emergency_access"] == True
-            ):
-                logger.debug("Есть оба режима, запущен их обработчик")
-                self.run_opening_days_mode_emergency_access(capsule_date)
+        elif (
+            capsule_date["opening_days_mode"] == True
+            and capsule_date["emergency_access"] == True
+        ):
+            logger.debug("Есть оба режима, запущен их обработчик")
+            self.run_opening_days_mode_emergency_access(capsule_date)
 
-            else:
-                logger.debug("Капсула открыть нельзя")
-                self.create_console_output(status="1")
+        else:
+            logger.debug("Капсула открыть нельзя")
+            self.create_console_output(status="1")
 
     def run_opening_days_mode_emergency_access(self, capsule_date: FormatData) -> None:
         if capsule_date["opening_days_mode"] == "ea_turn_on":
@@ -520,10 +532,13 @@ class СapsuleProcessor:
         return dct_unformat
 
     def write_capsule(self, save_date_dict: UnformatData) -> None:
-        with open(f"{self.capsule_folder}/{str(self.id)}", "wb") as file:
-            json_str = json.dumps(save_date_dict)
-            encrypted_message = self.fernet.encrypt(json_str.encode())
-            file.write(encrypted_message)
+        json_str = json.dumps(save_date_dict)
+        encrypted_message = self.fernet.encrypt(json_str.encode())
+        if self.without_file == False:
+            with open(f"{self.capsule_folder}/{str(self.id)}", "wb") as file:
+                file.write(encrypted_message)
+        else:
+            self.create_console_output(encrypted_capsule=str(encrypted_message)[2:-1])
 
     def show_final_console_output(self) -> None:
         """
@@ -538,31 +553,74 @@ class СapsuleProcessor:
         8 - Экстренный доступ сброшен, ЭД не реализовался при режиме opening_days_mode, придётся ждать следующего времени входа по opening_days_mode
         9 - Время захода не правильное, но оно скрытое, а поэтому не сбрасывается
         """
-        if self.final_console_output["status"] == "1":
+        if (
+            self.without_file == True
+            and "encrypted_capsule" in self.final_console_output
+        ):
+            print(self.final_console_output["encrypted_capsule"])
+
+        if (
+            "status" in self.final_console_output
+            and self.final_console_output["status"] == "1"
+        ):
             print("1")
-        elif self.final_console_output["status"] == "2":
+        elif (
+            "status" in self.final_console_output
+            and "text" in self.final_console_output
+            and self.final_console_output["status"] == "2"
+        ):
             print("2")
             print(self.final_console_output["text"])
-        elif self.final_console_output["status"] == "3":
+        elif (
+            "status" in self.final_console_output
+            and "num_access" in self.final_console_output
+            and "start_limit" in self.final_console_output
+            and "end_limit" in self.final_console_output
+            and self.final_console_output["status"] == "3"
+        ):
             print("3")
             print(self.final_console_output["num_access"])
             print(self.final_console_output["start_limit"])
             print(self.final_console_output["end_limit"])
-        elif self.final_console_output["status"] == "4":
+        elif (
+            "status" in self.final_console_output
+            and "num_access" in self.final_console_output
+            and self.final_console_output["status"] == "4"
+        ):
             print("4")
             print(self.final_console_output["num_access"])
-        elif self.final_console_output["status"] == "5":
+        elif (
+            "status" in self.final_console_output
+            and "num_access" in self.final_console_output
+            and "start_limit" in self.final_console_output
+            and "end_limit" in self.final_console_output
+            and self.final_console_output["status"] == "5"
+        ):
             print("5")
             print(self.final_console_output["num_access"])
             print(self.final_console_output["start_limit"])
             print(self.final_console_output["end_limit"])
-        elif self.final_console_output["status"] == "6":
+        elif (
+            "status" in self.final_console_output
+            and "num_access" in self.final_console_output
+            and self.final_console_output["status"] == "6"
+        ):
             print("6")
             print(self.final_console_output["num_access"])
-        elif self.final_console_output["status"] == "7":
+        elif (
+            "status" in self.final_console_output
+            and self.final_console_output["status"] == "7"
+        ):
             print("7")
-        elif self.final_console_output["status"] == "8":
+        elif (
+            "status" in self.final_console_output
+            and self.final_console_output["status"] == "8"
+        ):
             print("8")
-        elif self.final_console_output["status"] == "9":
+        elif (
+            "status" in self.final_console_output
+            and "num_access" in self.final_console_output
+            and self.final_console_output["status"] == "9"
+        ):
             print("9")
             print(self.final_console_output["num_access"])
