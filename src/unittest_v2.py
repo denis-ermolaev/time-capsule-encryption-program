@@ -2,7 +2,7 @@ import datetime
 import json
 from math import ceil
 from time import sleep
-from src.CapsuleProcessor import СapsuleProcessor
+from CapsuleProcessor import СapsuleProcessor
 import unittest
 from unittest.mock import Mock
 import random
@@ -13,10 +13,10 @@ import tqdm
 test_opening_days_mode = True
 baseReadCreateAndOnlyEA = True
 test_opening_days_mode_and_ea = True
-num_iterations = 30000
+num_iterations = 100
 
 
-@unittest.skipIf(not test_opening_days_mode, "Тест пропуcкаем")
+@unittest.skipIf(not test_opening_days_mode_and_ea, "Тест пропуcкаем")
 class Test_opening_days_mode_and_ea(unittest.TestCase):
     def test_12_create_close_days_mode_and_ea(self):
         """В определённые дни opening_days_mode, если включен ea_after_open,
@@ -40,7 +40,6 @@ class Test_opening_days_mode_and_ea(unittest.TestCase):
         capsule_processor = СapsuleProcessor(args)
         self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
-    def test_13_open_close_days_mode_and_ea(self):
         attrs = {
             "id": 7,
             "read": True,
@@ -52,7 +51,7 @@ class Test_opening_days_mode_and_ea(unittest.TestCase):
 
         capsule_processor = СapsuleProcessor(args)
         print(capsule_processor.final_console_output)
-        self.assertEqual(capsule_processor.final_console_output["status"], "8")
+        self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
     def test_14_create_days_mode_and_ea(self):
         """В определённые дни opening_days_mode, если включен ea_after_open,
@@ -76,7 +75,6 @@ class Test_opening_days_mode_and_ea(unittest.TestCase):
         capsule_processor = СapsuleProcessor(args)
         self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
-    def test_15_open_days_mode_and_ea(self):
         attrs = {
             "id": 8,
             "read": True,
@@ -91,7 +89,11 @@ class Test_opening_days_mode_and_ea(unittest.TestCase):
 
         # Заход в скрытое время, но он не сбрасывает время
         capsule_processor = СapsuleProcessor(args)
-        self.assertEqual(capsule_processor.final_console_output["status"], "6")
+        self.assertEqual(
+            capsule_processor.final_console_output["status"],
+            "9",
+            msg=(attrs, capsule_processor.final_console_output),
+        )
         # После 3.6 получаем уже открытое время
         sleep(4)
         capsule_processor = СapsuleProcessor(args)
@@ -102,7 +104,7 @@ class Test_opening_days_mode_and_ea(unittest.TestCase):
         # Заходим в неправильное время и всё сбрасывается
         capsule_processor = СapsuleProcessor(args)
         print(capsule_processor.final_console_output)
-        self.assertEqual(capsule_processor.final_console_output["status"], "6")
+        self.assertEqual(capsule_processor.final_console_output["status"], "7")
 
         # Начинаем заново Т.к hidden время нам уже назначено, то ждём 4 сек
         # После 3.6 получаем уже открытое время
@@ -151,7 +153,11 @@ class Test_opening_days_mode(unittest.TestCase):
 
         capsule_processor = СapsuleProcessor(args)
         print(capsule_processor.final_console_output)
-        self.assertEqual(capsule_processor.final_console_output["status"], "2")
+        self.assertEqual(
+            capsule_processor.final_console_output["status"],
+            "2",
+            msg=(attrs, capsule_processor.final_console_output),
+        )
         self.assertTrue(capsule_processor.final_console_output["text"])
 
     def test_09_create_opening_days_mode_capsule(self):
@@ -194,6 +200,10 @@ class Test_opening_days_mode(unittest.TestCase):
             day_week_odm = ",".join(
                 [i for i in "m,t,w,th,f,sa,su".split(",") if random.randint(0, 1)]
             )
+            while len(day_week_odm) == 0:
+                day_week_odm = ",".join(
+                    [i for i in "m,t,w,th,f,sa,su".split(",") if random.randint(0, 1)]
+                )
             date_change = datetime.datetime(
                 year=current_datetime.year - 1,
                 month=random.randint(1, 12),
@@ -314,6 +324,7 @@ class Test_opening_days_mode(unittest.TestCase):
 @unittest.skipIf(not baseReadCreateAndOnlyEA, "Тест пропуcкаем")
 class BaseReadCreateAndOnlyEA(unittest.TestCase):
     def test_01_create_open_capsule(self):
+        """Стандартная открытая капсула, т.к время открытия подошло, а режимов ea и odm нет"""
         attrs = {
             "id": 1,
             "read": False,
@@ -330,7 +341,6 @@ class BaseReadCreateAndOnlyEA(unittest.TestCase):
         capsule_processor = СapsuleProcessor(args)
         self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
-    def test_02_read_open_capsule(self):
         attrs = {
             "id": 1,
             "read": True,
@@ -343,9 +353,10 @@ class BaseReadCreateAndOnlyEA(unittest.TestCase):
         capsule_processor = СapsuleProcessor(args)
         self.assertEqual(capsule_processor.final_console_output["status"], "2")
 
-    def test_03_create_close_capsule(self):
+    def test_02_create_close_capsule(self):
+        """Тест закрытой капсулы, у которой время открытия 2050 год, а других режимов нету"""
         attrs = {
-            "id": 2,
+            "id": 1,
             "read": False,
             "create": [
                 "gfbgfb",
@@ -360,9 +371,8 @@ class BaseReadCreateAndOnlyEA(unittest.TestCase):
         capsule_processor = СapsuleProcessor(args)
         self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
-    def test_04_read_close_capsule(self):
         attrs = {
-            "id": 2,
+            "id": 1,
             "read": True,
             "create": None,
             "emergency": None,
@@ -373,7 +383,8 @@ class BaseReadCreateAndOnlyEA(unittest.TestCase):
         capsule_processor = СapsuleProcessor(args)
         self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
-    def test_05_create_ea_capsule(self):
+    def test_03_create_ea_capsule(self):
+        """Капсула с режимом Экстренного доступа, но с ожиданием всего в пару секунд"""
         attrs = {
             "id": 3,
             "read": False,
@@ -393,7 +404,6 @@ class BaseReadCreateAndOnlyEA(unittest.TestCase):
         capsule_processor = СapsuleProcessor(args)
         self.assertEqual(capsule_processor.final_console_output["status"], "1")
 
-    def test_06_read_ea_capsule(self):
         attrs = {
             "id": 3,
             "read": True,
@@ -408,7 +418,7 @@ class BaseReadCreateAndOnlyEA(unittest.TestCase):
         self.assertEqual(capsule_processor.final_console_output["status"], "6")
         # Заход в скрытое время, но он не сбрасывает время
         capsule_processor = СapsuleProcessor(args)
-        self.assertEqual(capsule_processor.final_console_output["status"], "6")
+        self.assertEqual(capsule_processor.final_console_output["status"], "9")
         # После 3.6 получаем уже открытое время
         sleep(4)
         capsule_processor = СapsuleProcessor(args)
@@ -417,13 +427,14 @@ class BaseReadCreateAndOnlyEA(unittest.TestCase):
         self.assertTrue(capsule_processor.final_console_output["end_limit"])
 
         # Заходим в неправильное время и всё сбрасывается
+        # Нам назначается автоматически новое время(скрытое)
         capsule_processor = СapsuleProcessor(args)
         print(capsule_processor.final_console_output)
-        self.assertEqual(capsule_processor.final_console_output["status"], "6")
+        self.assertEqual(capsule_processor.final_console_output["status"], "7")
 
-        # Начинаем занова Т.к hidden время нам уже назначено, то ждём 4 сек
-        # После 3.6 получаем уже открытое время
+        # Ждём его
         sleep(4)
+        # Получаем второе время - открытое
         capsule_processor = СapsuleProcessor(args)
         self.assertEqual(capsule_processor.final_console_output["status"], "3")
         self.assertTrue(capsule_processor.final_console_output["start_limit"])

@@ -1,9 +1,9 @@
 import argparse
-from src.CapsuleProcessor import СapsuleProcessor, logger
+from CapsuleProcessor import СapsuleProcessor, logger
 
 # Тестовый запуск создания
 # python src/create_read_capsules_v2.py 1 --create "gfbgfb" "2025-04-26 14:00:00" "2025-04-26 14:00:00"
-# python src/create_read_capsules_v2.py 2 --create "gfbgfb" "2025-04-17 14:00:00" "2025-04-26 14:00:00" --emergency true '[[[0.1, 0.2], "hidden"], [[0.1, 0.2] , "open"]]'
+# python src/create_read_capsules_v2.py 2 --create "gfbgfb" "2025-04-17 14:00:00" "2025-04-26 14:00:00" --emergency true '[[[0.001, 0.001], "hidden"], [[0.001, 0.001] , "open"]]'
 # python src/create_read_capsules_v2.py 2 --create "gfbgfb" "2025-04-17 14:00:00" "2025-04-26 14:00:00" --emergency true '[[[0.1, 0.2], "hidden"], [[0.1, 0.2] , "open"]]' --opening_days_mode "m,t,w" 2 "12:00" "13:00"
 
 # Тестовый запуск открытия
