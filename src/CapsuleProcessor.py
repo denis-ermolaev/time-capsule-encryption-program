@@ -1,5 +1,3 @@
-import os
-import datetime
 from typing import (
     Literal,
     NotRequired,
@@ -7,6 +5,8 @@ from typing import (
     TypedDict,
     Unpack,
 )
+import os
+import datetime
 from cryptography.fernet import Fernet
 import json
 import logging
@@ -147,20 +147,16 @@ class СapsuleProcessor:
         """Обработка чтения капсулы, в случае экстренного доступа запуск ф-и run_emergency_access"""
         if self.without_file == False:
             with open(f"{self.capsule_folder}/{str(self.id)}", "rb") as file:
-
-                decrypted_data = self.fernet.decrypt(file.read()).decode()
-                json_loads: UnformatData = json.loads(decrypted_data)
-                capsule_date = self.format_dictionary(
-                    json_loads
-                )  # loads - из строки, load из файла, аналогично dumps и dump
-                logger.debug(("Начало чтения", capsule_date))
+                encrypted_capsule = file.read()
         else:
-            decrypted_data = self.fernet.decrypt(self.encrypted_capsule).decode()
-            json_loads: UnformatData = json.loads(decrypted_data)
-            capsule_date = self.format_dictionary(
-                json_loads
-            )  # loads - из строки, load из файла, аналогично dumps и dump
-            logger.debug(("Начало чтения", capsule_date))
+            encrypted_capsule = self.encrypted_capsule
+        decrypted_data = self.fernet.decrypt(encrypted_capsule).decode()
+        json_loads: UnformatData = json.loads(decrypted_data)
+        capsule_date = self.format_dictionary(
+            json_loads
+        )  # loads - из строки, load из файла, аналогично dumps и dump
+
+        logger.debug(("Начало чтения", capsule_date))
 
         if (
             self.current_time > capsule_date["open_time"]
@@ -202,12 +198,14 @@ class СapsuleProcessor:
             self.create_console_output(status="1")
 
     def run_opening_days_mode_emergency_access(self, capsule_date: FormatData) -> None:
+        assert "ea_after_open" in capsule_date
+
         if capsule_date["opening_days_mode"] == "ea_turn_on":
             logger.debug(
                 "Подтверждение экстренного доступа (Т.к opening_days_mode == ea_turn_on)"
             )
             self.run_emergency_access(capsule_date)
-        elif "ea_after_open" in capsule_date and capsule_date["ea_after_open"] == False:
+        elif capsule_date["ea_after_open"] == False:
             logger.debug(
                 "Если текст не будет получен по odm, он будет получен по экстренному доступу(Нет флага ea_after_open)"
             )
@@ -226,67 +224,58 @@ class СapsuleProcessor:
                 self.run_emergency_access(capsule_date)
 
     def run_opening_days_mode(self, capsule_date: FormatData) -> None:
-        if capsule_date["opening_days_mode"] != True:
-            raise AssertionError(
-                "Для вызова метода run_opening_days_mode, opening_days_mode должен быть True"
-            )
-        if (
+        error_message = (
+            "Ключи opening_days_mode, day_week_odm"
+            "num_week_odm,time_odm_start, time_odm_end должны быть определены",
+            capsule_date,
+        )
+        assert (
             "opening_days_mode" in capsule_date
-            and "day_week_odm" in capsule_date
-            and "num_week_odm" in capsule_date
-            and "time_odm_start" in capsule_date
-            and "time_odm_end" in capsule_date
-        ):
-            now_time = self.current_time.time().replace(
-                second=0, microsecond=0
-            )  # Время
-            DAYNAMES: day_week_tuple_type = (
-                None,
-                "m",
-                "t",
-                "w",
-                "th",
-                "f",
-                "sa",
-                "su",
-            )  # m,t,w,th,f,sa,su
-            weekday = DAYNAMES[
-                self.current_time.toordinal() % 7 or 7
-            ]  # Текущий день недели
+            and capsule_date["opening_days_mode"] == True
+        ), "Для вызова метода run_opening_days_mode, opening_days_mode должен быть True"
+        assert "day_week_odm" in capsule_date, error_message
+        assert "num_week_odm" in capsule_date, error_message
+        assert "time_odm_start" in capsule_date, error_message
+        assert "time_odm_end" in capsule_date, error_message
 
-            start_point = capsule_date["date_change"] - datetime.timedelta(
-                days=(capsule_date["date_change"].toordinal() % 7 or 7) - 1
-            )
-            end_point = self.current_time - datetime.timedelta(
-                days=(self.current_time.toordinal() % 7 or 7) - 1
-            )
-            is_correct_week = (
-                (ceil(int((end_point - start_point).days) / 7) + 1)
-                % (capsule_date["num_week_odm"] + 1)
-            ) == 0  # Неделя для открытия по opening_days_mode
-            if (
-                self.current_time > capsule_date["open_time"]
-                and capsule_date["opening_days_mode"] == True
-                and weekday in capsule_date["day_week_odm"]
-                and is_correct_week
-                and now_time >= capsule_date["time_odm_start"]
-                and now_time <= capsule_date["time_odm_end"]
-            ):
-                logger.debug("Текст получен входе проверки odm")
-                self.create_console_output(status="2", text=capsule_date["text"])
-            else:
-                logger.debug(
-                    "Текст не получен после odm, время или день или неделя не те"
-                )
-                self.create_console_output(status="1")
+        now_time = self.current_time.time().replace(second=0, microsecond=0)  # Время
+        DAYNAMES: day_week_tuple_type = (
+            None,
+            "m",
+            "t",
+            "w",
+            "th",
+            "f",
+            "sa",
+            "su",
+        )  # m,t,w,th,f,sa,su
+        weekday = DAYNAMES[
+            self.current_time.toordinal() % 7 or 7
+        ]  # Текущий день недели
+
+        start_point = capsule_date["date_change"] - datetime.timedelta(
+            days=(capsule_date["date_change"].toordinal() % 7 or 7) - 1
+        )
+        end_point = self.current_time - datetime.timedelta(
+            days=(self.current_time.toordinal() % 7 or 7) - 1
+        )
+        is_correct_week = (
+            (ceil(int((end_point - start_point).days) / 7) + 1)
+            % (capsule_date["num_week_odm"] + 1)
+        ) == 0  # Неделя для открытия по opening_days_mode
+        if (
+            self.current_time > capsule_date["open_time"]
+            and capsule_date["opening_days_mode"] == True
+            and weekday in capsule_date["day_week_odm"]
+            and is_correct_week
+            and now_time >= capsule_date["time_odm_start"]
+            and now_time <= capsule_date["time_odm_end"]
+        ):
+            logger.debug("Текст получен входе проверки odm")
+            self.create_console_output(status="2", text=capsule_date["text"])
         else:
-            raise AssertionError(
-                (
-                    "Ключи opening_days_mode, day_week_odm"
-                    "num_week_odm,time_odm_start, time_odm_end должны быть определены",
-                    capsule_date,
-                )
-            )
+            logger.debug("Текст не получен после odm, время или день или неделя не те")
+            self.create_console_output(status="1")
 
     def run_emergency_access(self, capsule_date: FormatData) -> None:
         """Обработка экстренного доступа"""
@@ -559,68 +548,43 @@ class СapsuleProcessor:
         ):
             print(self.final_console_output["encrypted_capsule"])
 
-        if (
-            "status" in self.final_console_output
-            and self.final_console_output["status"] == "1"
-        ):
+        assert "status" in self.final_console_output
+
+        if self.final_console_output["status"] == "1":
             print("1")
-        elif (
-            "status" in self.final_console_output
-            and "text" in self.final_console_output
-            and self.final_console_output["status"] == "2"
-        ):
+        elif self.final_console_output["status"] == "2":
+            assert "text" in self.final_console_output
             print("2")
             print(self.final_console_output["text"])
-        elif (
-            "status" in self.final_console_output
-            and "num_access" in self.final_console_output
-            and "start_limit" in self.final_console_output
-            and "end_limit" in self.final_console_output
-            and self.final_console_output["status"] == "3"
-        ):
+        elif self.final_console_output["status"] == "3":
+            assert "num_access" in self.final_console_output
+            assert "start_limit" in self.final_console_output
+            assert "end_limit" in self.final_console_output
             print("3")
             print(self.final_console_output["num_access"])
             print(self.final_console_output["start_limit"])
             print(self.final_console_output["end_limit"])
-        elif (
-            "status" in self.final_console_output
-            and "num_access" in self.final_console_output
-            and self.final_console_output["status"] == "4"
-        ):
+        elif self.final_console_output["status"] == "4":
+            assert "num_access" in self.final_console_output
             print("4")
             print(self.final_console_output["num_access"])
-        elif (
-            "status" in self.final_console_output
-            and "num_access" in self.final_console_output
-            and "start_limit" in self.final_console_output
-            and "end_limit" in self.final_console_output
-            and self.final_console_output["status"] == "5"
-        ):
+        elif self.final_console_output["status"] == "5":
+            assert "num_access" in self.final_console_output
+            assert "start_limit" in self.final_console_output
+            assert "end_limit" in self.final_console_output
             print("5")
             print(self.final_console_output["num_access"])
             print(self.final_console_output["start_limit"])
             print(self.final_console_output["end_limit"])
-        elif (
-            "status" in self.final_console_output
-            and "num_access" in self.final_console_output
-            and self.final_console_output["status"] == "6"
-        ):
+        elif self.final_console_output["status"] == "6":
+            assert "num_access" in self.final_console_output
             print("6")
             print(self.final_console_output["num_access"])
-        elif (
-            "status" in self.final_console_output
-            and self.final_console_output["status"] == "7"
-        ):
+        elif self.final_console_output["status"] == "7":
             print("7")
-        elif (
-            "status" in self.final_console_output
-            and self.final_console_output["status"] == "8"
-        ):
+        elif self.final_console_output["status"] == "8":
             print("8")
-        elif (
-            "status" in self.final_console_output
-            and "num_access" in self.final_console_output
-            and self.final_console_output["status"] == "9"
-        ):
+        elif self.final_console_output["status"] == "9":
+            assert "num_access" in self.final_console_output
             print("9")
             print(self.final_console_output["num_access"])

@@ -13,7 +13,7 @@ import tqdm
 test_opening_days_mode = True
 baseReadCreateAndOnlyEA = True
 test_opening_days_mode_and_ea = True
-num_iterations = 100
+num_iterations = 700
 
 
 @unittest.skipIf(not test_opening_days_mode_and_ea, "Тест пропуcкаем")

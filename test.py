@@ -2,44 +2,27 @@ from typing import NotRequired, TypedDict
 from unittest.mock import Mock
 from src.CapsuleProcessor import СapsuleProcessor
 
-Point2D = TypedDict("Point2D", {"1": str, "2": str, "3": NotRequired[str]})
 
-# a: Point2D = {"1": "3223", "2": "24546"}
-a: Point2D = {"1": "3223", "2": "24546"}
-
-a["3"] = str(0)
-print(a)
-c = ",".join([])
-print(len(c), type(c))
-# if "3" in a:
-#     raise AssertionError("Ошибка")
-# else:
-#     a["3"] += "New Value"
-
-# print(a)
-attrs = {
-    "id": 1,
-    "read": False,
-    "create": [
-        "gfbgfb",
-        "2025-04-26 14:00:00",
-        "2025-04-26 14:00:00",
-    ],
-    "emergency": None,
-    "opening_days_mode": None,
-}
-args = Mock(**attrs)
-a = СapsuleProcessor(args, without_file=True)
-print(a.final_console_output["encrypted_capsule"])
+def some_condition():
+    return True
 
 
-attrs = {
-    "id": 1,
-    "read": True,
-    "create": None,
-    "emergency": None,
-    "opening_days_mode": None,
-}
-args = Mock(**attrs)
-b = СapsuleProcessor(args, True, a.final_console_output["encrypted_capsule"])
-print(b.final_console_output)
+x: str | None = "something" if some_condition() else None
+if x is not None:
+    # Mypy understands x won't be None here because of the if-statement
+    print(x.upper())
+# If you know a value can never be None due to some logic that mypy doesn't
+# understand, use an assert
+assert x is not None
+print(x.upper())
+
+mydict = TypedDict("mydict", {"1": int | None, "2": int, "3": NotRequired[int]})
+a: mydict = {"1": 34, "2": 24}
+
+
+assert "3" in a
+assert a["1"] is not None
+a["1"] += 5
+
+
+a["3"] += 5
